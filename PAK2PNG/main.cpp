@@ -128,31 +128,39 @@ typedef struct stBrushtag
 	short pvy; //correction for placement
 } stBrush;
 
-unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& pak)
+unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, CHAR PathName[28])
 {
+	DWORD  nCount;
 	int iASDstart;
-	int sNthFile = 0;
-	int m_iTotalFrame;
-	int bmpStart = 0; // bitmapdata starts here
-	int pixeloffset = 0;
-	stBrush *m_stBrush;
-	iASDstart = pak[24 + sNthFile * 8];
-		//i+100      Sprite Confirm
-	m_iTotalFrame = pak[iASDstart + 100];
-	bmpStart = iASDstart + (108 + (12 * m_iTotalFrame)); 
+	HANDLE hPakFile;
+	int sNthFile = 0; // Number of file
+	DWORD m_dwBitmapFileStartLoc;
+	std::vector<unsigned char> pak;
+
+	hPakFile = CreateFileA(PathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
+
+	stBrushtag *m_stBrush;
+	int m_iTotalFrame = 0;
+
+	SetFilePointer(hPakFile, 24 + sNthFile * 8, NULL, FILE_BEGIN);
+	ReadFile(hPakFile, &iASDstart, 4, &nCount, NULL);
+	//i+100       Sprite Confirm
+	SetFilePointer(hPakFile, iASDstart + 100, NULL, FILE_BEGIN);
+	ReadFile(hPakFile, &m_iTotalFrame, 4, &nCount, NULL);
+	m_dwBitmapFileStartLoc = iASDstart + (108 + (12 * m_iTotalFrame));
 	m_stBrush = new stBrush[m_iTotalFrame];
-	m_stBrush = (stBrush*)pak[12 * m_iTotalFrame];
+	ReadFile(hPakFile, m_stBrush, 12 * m_iTotalFrame, &nCount, NULL);
 
-	BITMAPFILEHEADER *fh; 
-	LPSTR m_lpDib = NULL;
-	HANDLE hFileRead;
-	DWORD nCount;
-	fh = (BITMAPFILEHEADER*) pak[bmpStart]; // ?.?
-	m_lpDib = (LPSTR)new char[fh->bfSize - 14];
-	m_lpDib = (char *)pak[fh->bfSize - 14];
-
-	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)m_lpDib;
-	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)m_lpDib;
+	BITMAPFILEHEADER fh; //bmp 
+	
+	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
+	ReadFile(hPakFile, (char *)&fh, 14, &nCount, NULL);//sizeof(bmpHeader)==14
+	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
+	pak.resize(fh.bfSize);
+	ReadFile(hPakFile, &pak[0], fh.bfSize, &nCount, NULL);
+	CloseHandle(hPakFile);
+	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)pak[14];
+	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)pak[14];
 	WORD m_wWidthX = (WORD)(bmpInfoHeader->biWidth);
 	WORD m_wWidthY = (WORD)(bmpInfoHeader->biHeight);
 	WORD m_wColorNums;
@@ -165,7 +173,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 		else m_wColorNums = 0;
 	}
 	else m_wColorNums = (WORD)(bmpInfoHeader->biClrUsed);
-
+	
 	return decodeBMP(image, w, h, pak);
 }
 
@@ -177,11 +185,9 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	std::vector<unsigned char> pak;
-	lodepng::load_file(pak, argv[1]);
 	std::vector<unsigned char> image;
 	unsigned w, h;
-	unsigned error = decodePAK(image, w, h, pak);
+	unsigned error = decodePAK(image, w, h, argv[1]);
 
 	if (error)
 	{
