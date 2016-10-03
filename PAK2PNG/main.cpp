@@ -136,7 +136,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	int pixeloffset = 0; // bitmapdata starts here
 	stBrush *m_stBrush;
 	iASDstart = pak[24 + sNthFile * 8];
-		//i+100       Sprite Confirm
+		//i+100      Sprite Confirm
 	m_iTotalFrame = pak[iASDstart + 100];
 	pixeloffset = iASDstart + (108 + (12 * m_iTotalFrame)); 
 	m_stBrush = new stBrush[m_iTotalFrame];
