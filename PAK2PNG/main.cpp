@@ -50,7 +50,7 @@ NOTE: it overwrites the output file without warning if it exists!
 using namespace std;
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo, long m_dwBitmapFileStartLoc)
+unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo, long lBitmapFileStartLoc)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
@@ -86,7 +86,7 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 			for (unsigned x = 0; x < w; x++)
 			{
 				//pixel start byte position in the BMP
-				unsigned bmpos = pixeloffset + (h - y) * w + numChannels * x;
+				unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels * x;
 				//pixel start byte position in the new raw image
 				unsigned newpos = 4 * y * w + 4 * x;
 				if (numChannels == 3)
@@ -109,13 +109,12 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 			for (unsigned x = 0; x < w; x++)
 			{
 				//pixel start byte position in the BMP
-				unsigned bmpos = m_dwBitmapFileStartLoc + pixeloffset + (h - y - 1) * scanlineBytes + x;
+				unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels* x;
 				
 				//pixel start byte position in the new raw image
 				unsigned newpos = 4 * y * w + 4 * x;
 
-				cout << "m_dwBitmapFileStartLoc: " << m_dwBitmapFileStartLoc << " Pixeloffset: "<< pixeloffset << " BMPOS: "<< bmpos << endl;
-			//	std::cout << "BMPos: "<< bmpos <<" R: " << (int)m_bmpInfo->bmiColors[bmpos].rgbRed << " G: " << (int)m_bmpInfo->bmiColors[bmpos].rgbGreen << " B: " << (int)m_bmpInfo->bmiColors[bmpos].rgbBlue << std::endl;
+				cout << "m_dwBitmapFileStartLoc: " << lBitmapFileStartLoc << " Pixeloffset: "<< pixeloffset << " BMPOS: "<< bmpos << endl;
 
 				image[newpos + 0] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbRed; //R
 				image[newpos + 1] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbGreen; //G
@@ -156,8 +155,8 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	DWORD  nCount;
 	int iASDstart = 0;
 	HANDLE hPakFile;
-	int sNthFile = 0; // Number of file1
-	long m_dwBitmapFileStartLoc;
+	int sNthFile = 2; // Number of file1
+	long lBitmapFileStartLoc;
 	std::vector<unsigned char> pak;
 	cout << PathName << endl;
 	hPakFile = CreateFileA(PathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
@@ -175,15 +174,15 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	std::cout << iASDstart << std::endl;
 	SetFilePointer(hPakFile, iASDstart + 100, NULL, FILE_BEGIN);
 	ReadFile(hPakFile, &m_iTotalFrame, 4, &nCount, NULL);
-	m_dwBitmapFileStartLoc = iASDstart + (108 + (12 * m_iTotalFrame));
+	lBitmapFileStartLoc = iASDstart + (108 + (12 * m_iTotalFrame));
 	m_stBrush = new stBrush[m_iTotalFrame];
 	ReadFile(hPakFile, m_stBrush, 12 * m_iTotalFrame, &nCount, NULL);
 
 	BITMAPFILEHEADER fh; //bmp 
 
-	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
+	SetFilePointer(hPakFile, lBitmapFileStartLoc, NULL, FILE_BEGIN);
 	ReadFile(hPakFile, (char *)&fh, 14, &nCount, NULL);//sizeof(bmpHeader)==14
-	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
+	SetFilePointer(hPakFile, lBitmapFileStartLoc, NULL, FILE_BEGIN);
 	pak.resize(GetFileSize(hPakFile, NULL));
 	ReadFile(hPakFile, &pak[0], fh.bfSize, &nCount, NULL);
 	CloseHandle(hPakFile);
@@ -205,7 +204,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 		//	std::cout << "R: " << (int)m_bmpInfo->bmiColors[i].rgbRed << " G: " << (int)m_bmpInfo->bmiColors[i].rgbGreen << " B: " << (int)m_bmpInfo->bmiColors[i].rgbBlue << std::endl;
 
 
-	return decodeBMP(image, w, h, pak, m_bmpInfo, m_dwBitmapFileStartLoc);
+	return decodeBMP(image, w, h, pak, m_bmpInfo, lBitmapFileStartLoc);
 }
 
 
