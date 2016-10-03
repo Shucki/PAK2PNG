@@ -47,21 +47,21 @@ NOTE: it overwrites the output file without warning if it exists!
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <Windows.h>
-
+using namespace std;
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp)
+unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo, long m_dwBitmapFileStartLoc)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
 	if (bmp.size() < MINHEADER) return -1;
 	if (bmp[0] != 'B' || bmp[1] != 'M') return 1; //It's not a BMP file if it doesn't start with marker 'BM'
-	unsigned pixeloffset = bmp[10] + 256 * bmp[11]; //where the pixel data starts
+	unsigned pixeloffset = bmp[10] + 256 * bmp[11] + 65536 * bmp[12] + bmp[13] * 16777216; //where the pixel data starts
 													//read width and height from BMP header
 	w = bmp[18] + bmp[19] * 256;
 	h = bmp[22] + bmp[23] * 256;
 	//read number of channels from BMP header
-	if (bmp[28] != 24 && bmp[28] != 32) return 2; //only 24-bit and 32-bit BMPs are supported.
+	if (bmp[28] != 24 && bmp[28] != 32 && bmp[28] != 8) return 2; //only 24-bit and 32-bit BMPs are supported. -> Added 8-bit
 	unsigned numChannels = bmp[28] / 8;
 
 	//The amount of scanline bytes is width of image times channels, with extra bytes added if needed
@@ -81,28 +81,50 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	-each scanline has padding bytes to make it a multiple of 4 if needed
 	The 2D for loop below does all these 3 conversions at once.
 	*/
-	for (unsigned y = 0; y < h; y++)
-		for (unsigned x = 0; x < w; x++)
-		{
-			//pixel start byte position in the BMP
-			unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels * x;
-			//pixel start byte position in the new raw image
-			unsigned newpos = 4 * y * w + 4 * x;
-			if (numChannels == 3)
+	if (numChannels != 1)
+		for (unsigned y = 0; y < h; y++)
+			for (unsigned x = 0; x < w; x++)
 			{
-				image[newpos + 0] = bmp[bmpos + 2]; //R
-				image[newpos + 1] = bmp[bmpos + 1]; //G
-				image[newpos + 2] = bmp[bmpos + 0]; //B
-				image[newpos + 3] = 255;            //A
+				//pixel start byte position in the BMP
+				unsigned bmpos = pixeloffset + (h - y) * w + numChannels * x;
+				//pixel start byte position in the new raw image
+				unsigned newpos = 4 * y * w + 4 * x;
+				if (numChannels == 3)
+				{
+					image[newpos + 0] = bmp[bmpos + 2]; //R
+					image[newpos + 1] = bmp[bmpos + 1]; //G
+					image[newpos + 2] = bmp[bmpos + 0]; //B
+					image[newpos + 3] = 255;            //A
+				}
+				else
+				{
+					image[newpos + 0] = bmp[bmpos + 3]; //R
+					image[newpos + 1] = bmp[bmpos + 2]; //G
+					image[newpos + 2] = bmp[bmpos + 1]; //B
+					image[newpos + 3] = bmp[bmpos + 0]; //A
+				}
 			}
-			else
+	if (numChannels == 1)
+		for (unsigned y = 0; y < h; y++)
+			for (unsigned x = 0; x < w; x++)
 			{
-				image[newpos + 0] = bmp[bmpos + 3]; //R
-				image[newpos + 1] = bmp[bmpos + 2]; //G
-				image[newpos + 2] = bmp[bmpos + 1]; //B
-				image[newpos + 3] = bmp[bmpos + 0]; //A
+				//pixel start byte position in the BMP
+				unsigned bmpos = m_dwBitmapFileStartLoc + pixeloffset + (h - y - 1) * scanlineBytes + x;
+				
+				//pixel start byte position in the new raw image
+				unsigned newpos = 4 * y * w + 4 * x;
+
+				cout << "m_dwBitmapFileStartLoc: " << m_dwBitmapFileStartLoc << " Pixeloffset: "<< pixeloffset << " BMPOS: "<< bmpos << endl;
+			//	std::cout << "BMPos: "<< bmpos <<" R: " << (int)m_bmpInfo->bmiColors[bmpos].rgbRed << " G: " << (int)m_bmpInfo->bmiColors[bmpos].rgbGreen << " B: " << (int)m_bmpInfo->bmiColors[bmpos].rgbBlue << std::endl;
+
+				image[newpos + 0] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbRed; //R
+				image[newpos + 1] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbGreen; //G
+				image[newpos + 2] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbBlue; //B
+				image[newpos + 3] = 255;//bmp[bmpos + 0]; //A
+				//Sleep(3);
+
 			}
-		}
+
 	return 0;
 }
 /***********Spritevalue explanations:*************
@@ -128,23 +150,29 @@ typedef struct stBrushtag
 	short pvy; //correction for placement
 } stBrush;
 
+
 unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, CHAR PathName[28])
 {
 	DWORD  nCount;
-	int iASDstart;
+	int iASDstart = 0;
 	HANDLE hPakFile;
-	int sNthFile = 0; // Number of file
-	DWORD m_dwBitmapFileStartLoc;
+	int sNthFile = 0; // Number of file1
+	long m_dwBitmapFileStartLoc;
 	std::vector<unsigned char> pak;
-
+	cout << PathName << endl;
 	hPakFile = CreateFileA(PathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
-
+	if (hPakFile == INVALID_HANDLE_VALUE)
+		cout << "CreateFile Error: " << GetLastError() << endl;
+	if (hPakFile == NULL) {
+		std::cout << "hPakFile is null" << std::endl;
+	}
 	stBrushtag *m_stBrush;
 	int m_iTotalFrame = 0;
 
 	SetFilePointer(hPakFile, 24 + sNthFile * 8, NULL, FILE_BEGIN);
-	ReadFile(hPakFile, &iASDstart, 4, &nCount, NULL);
+	if (!ReadFile(hPakFile, &iASDstart, 4, &nCount, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
 	//i+100       Sprite Confirm
+	std::cout << iASDstart << std::endl;
 	SetFilePointer(hPakFile, iASDstart + 100, NULL, FILE_BEGIN);
 	ReadFile(hPakFile, &m_iTotalFrame, 4, &nCount, NULL);
 	m_dwBitmapFileStartLoc = iASDstart + (108 + (12 * m_iTotalFrame));
@@ -152,15 +180,15 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	ReadFile(hPakFile, m_stBrush, 12 * m_iTotalFrame, &nCount, NULL);
 
 	BITMAPFILEHEADER fh; //bmp 
-	
+
 	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
 	ReadFile(hPakFile, (char *)&fh, 14, &nCount, NULL);//sizeof(bmpHeader)==14
 	SetFilePointer(hPakFile, m_dwBitmapFileStartLoc, NULL, FILE_BEGIN);
-	pak.resize(fh.bfSize);
+	pak.resize(GetFileSize(hPakFile, NULL));
 	ReadFile(hPakFile, &pak[0], fh.bfSize, &nCount, NULL);
 	CloseHandle(hPakFile);
-	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)pak[14];
-	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)pak[14];
+	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)&pak[14];
+	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)&pak[14];
 	WORD m_wWidthX = (WORD)(bmpInfoHeader->biWidth);
 	WORD m_wWidthY = (WORD)(bmpInfoHeader->biHeight);
 	WORD m_wColorNums;
@@ -173,9 +201,14 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 		else m_wColorNums = 0;
 	}
 	else m_wColorNums = (WORD)(bmpInfoHeader->biClrUsed);
-	
-	return decodeBMP(image, w, h, pak);
+	//	for (int i = 0; i < 256; i++)
+		//	std::cout << "R: " << (int)m_bmpInfo->bmiColors[i].rgbRed << " G: " << (int)m_bmpInfo->bmiColors[i].rgbGreen << " B: " << (int)m_bmpInfo->bmiColors[i].rgbBlue << std::endl;
+
+
+	return decodeBMP(image, w, h, pak, m_bmpInfo, m_dwBitmapFileStartLoc);
 }
+
+
 
 int main(int argc, char *argv[])
 {
