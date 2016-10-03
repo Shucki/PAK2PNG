@@ -120,8 +120,8 @@ nCount = Number of bytes read
 
 typedef struct stBrushtag
 {
-	short sx;
-	short sy;
+	short sx; //startX
+	short sy; //startY
 	short szx; //sizex
 	short szy; //sizey
 	short pvx; //correction for placement
@@ -133,24 +133,47 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	int iASDstart;
 	int sNthFile = 0;
 	int m_iTotalFrame;
-	int pixeloffset = 0; // bitmapdata starts here
+	int bmpStart = 0; // bitmapdata starts here
+	int pixeloffset = 0;
 	stBrush *m_stBrush;
 	iASDstart = pak[24 + sNthFile * 8];
 		//i+100      Sprite Confirm
 	m_iTotalFrame = pak[iASDstart + 100];
-	pixeloffset = iASDstart + (108 + (12 * m_iTotalFrame)); 
+	bmpStart = iASDstart + (108 + (12 * m_iTotalFrame)); 
 	m_stBrush = new stBrush[m_iTotalFrame];
 	m_stBrush = (stBrush*)pak[12 * m_iTotalFrame];
+
+	BITMAPFILEHEADER *fh; 
+	LPSTR m_lpDib = NULL;
+	HANDLE hFileRead;
+	DWORD nCount;
+	fh = (BITMAPFILEHEADER*) pak[bmpStart]; // ?.?
+	m_lpDib = (LPSTR)new char[fh->bfSize - 14];
+	m_lpDib = (char *)pak[fh->bfSize - 14];
+
+	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)m_lpDib;
+	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)m_lpDib;
+	WORD m_wWidthX = (WORD)(bmpInfoHeader->biWidth);
+	WORD m_wWidthY = (WORD)(bmpInfoHeader->biHeight);
+	WORD m_wColorNums;
+	if (bmpInfoHeader->biClrUsed == 0)
+	{
+		if (bmpInfoHeader->biBitCount == 24) m_wColorNums = 0;
+		else if (bmpInfoHeader->biBitCount == 8) m_wColorNums = 256;
+		else if (bmpInfoHeader->biBitCount == 1) m_wColorNums = 2;
+		else if (bmpInfoHeader->biBitCount == 4) m_wColorNums = 16;
+		else m_wColorNums = 0;
+	}
+	else m_wColorNums = (WORD)(bmpInfoHeader->biClrUsed);
+
+	return decodeBMP(image, w, h, pak);
 }
 
 int main(int argc, char *argv[])
 {
-	DWORD  nCount;
-	int iASDstart;
-
 	if (argc < 3)
 	{
-		std::cout << "Please provice input pak and output png file names" << std::endl;
+		std::cout << "Please provide input pak and output png file names" << std::endl;
 		return 0;
 	}
 

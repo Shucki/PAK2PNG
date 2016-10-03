@@ -27,12 +27,6 @@
     <ClCompile Include="lodepng-master\lodepng.cpp">
       <Filter>Source Files\lodepng</Filter>
     </ClCompile>
-    <ClCompile Include="lodepng-master\examples\example_bmp2png.cpp">
-      <Filter>Source Files\lodepng</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\Desktop\TFTK Client\TFTK Client\Sprite.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lodepng-master\lodepng.h">
