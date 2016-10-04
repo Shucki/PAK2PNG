@@ -134,7 +134,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	// Create pakfile handle and check for success
 	pakFile = CreateFileA(pathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
 	if (pakFile == INVALID_HANDLE_VALUE) {
-		cout << "CreateFile Error: " << GetLastError()<< " PathName: "<< pathName << endl;
+		cout << "CreateFile Error: " << GetLastError() << " PathName: " << pathName << endl;
 		return 4;
 	}
 	if (pakFile == NULL) {
@@ -190,7 +190,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	// Create destination folder
 	fileDest.erase(fileDest.end() - 4, fileDest.end());
 	_mkdir(fileDest.c_str());
-	
+
 	// Create pakfile handle and check for success
 	pakFile = CreateFileA(pakPathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
 	if (pakFile == INVALID_HANDLE_VALUE) {
@@ -206,7 +206,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	SetFilePointer(pakFile, 24, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
 	CloseHandle(pakFile);
-	numberOfFiles = (numberOfFiles-24) / 8;
+	numberOfFiles = (numberOfFiles - 24) / 8;
 
 	for (int i = 0; i < numberOfFiles; i++) {
 		std::vector<unsigned char> image;
@@ -244,7 +244,7 @@ int executeForEntireDirectory() {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
 			if ((fileType = strstr(ent->d_name, ".pak")) != NULL) {
-				cout << ent->d_name << endl;
+				cout << "Unpacking: " << ent->d_name << endl;
 				unpackEntirePakFile(ent->d_name);
 				packFiles++;
 			}
