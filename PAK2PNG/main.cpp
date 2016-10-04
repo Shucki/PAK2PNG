@@ -39,6 +39,9 @@ NOTE: it overwrites the output file without warning if it exists!
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <Windows.h>
+#include <direct.h>
+#include "dirent.h"
+#include <sstream>
 
 using namespace std;
 
@@ -109,32 +112,33 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 }
 
 /**
-* Method:    decodePAK
-* param image: output image
-* param w: image width
-* param h: image height
-* pathName: filepath of pak file
-* numberOfFile: which bmp file inside the PAK file to extract
-* return: non-0 if error
+* Method:		decodePAK
+* param image:	output image
+* param w:		image width
+* param h:		image height
+* pathName:		filepath of pak file
+* numberOfFile:	which bmp file inside the PAK file to extract
+* return:		non-0 if error
 */
-unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], int numberOfFile = 2)
+unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], int numberOfFile = 0)
 {
 	DWORD  readBytes; // Bytes read after readfile, usable for debugging information
 	int spriteHeaderStart = 0; // Every bmp has a sprite header above
 	BITMAPFILEHEADER bmpFileHeader; // File header of the bmp we read
+	int numberOfFiles = 0;
 	HANDLE pakFile;
 
 	long bitmapFileStartLoc;
-	std::vector<unsigned char> pak;
+	std::vector<unsigned char> bmp;
 
 	// Create pakfile handle and check for success
 	pakFile = CreateFileA(pathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
 	if (pakFile == INVALID_HANDLE_VALUE) {
-		cout << "CreateFile Error: " << GetLastError() << endl;
+		cout << "CreateFile Error: " << GetLastError()<< " PathName: "<< pathName << endl;
 		return 4;
 	}
 	if (pakFile == NULL) {
-		std::cout << "hPakFile is null" << std::endl;
+		std::cout << "pakFile is null" << std::endl;
 		return 4;
 	}
 
@@ -145,63 +149,123 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	// Go to sprite header start bytes and read them
 	SetFilePointer(pakFile, 24 + numberOfFile * 8, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &spriteHeaderStart, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	
+
 	// Sprite header start + 100 is where the information of how many frames are in the bitmap is stored.
 	SetFilePointer(pakFile, spriteHeaderStart + 100, NULL, FILE_BEGIN);
-	if(!ReadFile(pakFile, &pngInformation.imageFrames, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	
+	if (!ReadFile(pakFile, &pngInformation.imageFrames, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+
 	// Bitmap information starts after total frame info and the individual sprite info struct. (Unknown: what are the 4 bytes spriteheaderstart + 104 ??
 	bitmapFileStartLoc = spriteHeaderStart + (108 + (12 * pngInformation.imageFrames));
 	pngInformation.frameInformation = new frameInformtation[pngInformation.imageFrames];
-	if(!ReadFile(pakFile, pngInformation.frameInformation, 12 * pngInformation.imageFrames, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	
+	if (!ReadFile(pakFile, pngInformation.frameInformation, 12 * pngInformation.imageFrames, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+
 	// Read bmp header
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
-	if(!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl; // sizeof(bmpHeader) = 14 
-	
-	// Resize the pak vector to full pakfile size, so it can be used in the bmp decoding function
-	pak.resize(bmpFileHeader.bfSize);
+	if (!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl; // sizeof(bmpHeader) = 14 
+
+	// Resize the bmp vector to bmp size (found in header), if size errors occur check here it is stated online this might be incorrect for some files.
+	bmp.resize(bmpFileHeader.bfSize);
 
 	// Read bmp info into pak vector
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
-	if(!ReadFile(pakFile, &pak[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	if (!ReadFile(pakFile, &bmp[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
 
 	CloseHandle(pakFile);
 
 	// Read DIB info header
-	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&pak[14];
-	return decodeBMP(image, w, h, pak, headerDIBInformation);
+	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&bmp[14];
+	return decodeBMP(image, w, h, bmp, headerDIBInformation);
 }
 
+/**
+param:	pakPathName: name of .PAK file to unpack
+*/
+void unpackEntirePakFile(char pakPathName[260]) {
+	HANDLE pakFile;
+	int numberOfFiles = 0;
+	DWORD readBytes = 0;
+	string fileDest;
+	fileDest = pakPathName;
 
-
-int main(int argc, char *argv[])
-{
-	if (argc < 3)
-	{
-		std::cout << "Please provide input pak and output png file names" << std::endl;
-		return 0;
+	// Create destination folder
+	fileDest.erase(fileDest.end() - 4, fileDest.end());
+	_mkdir(fileDest.c_str());
+	
+	// Create pakfile handle and check for success
+	pakFile = CreateFileA(pakPathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
+	if (pakFile == INVALID_HANDLE_VALUE) {
+		cout << "CreateFile Error: " << GetLastError() << endl;
+		return;
+	}
+	if (pakFile == NULL) {
+		std::cout << "pakFile is null" << std::endl;
+		return;
 	}
 
-	std::vector<unsigned char> image;
-	unsigned w, h;
-	unsigned error = decodePAK(image, w, h, argv[1]);
+	// Check for how many files there are
+	SetFilePointer(pakFile, 24, NULL, FILE_BEGIN);
+	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	CloseHandle(pakFile);
+	numberOfFiles = (numberOfFiles-24) / 8;
 
-	if (error)
-	{
-		std::cout << "PAK decoding error " << error << std::endl;
-		return 0;
+	for (int i = 0; i < numberOfFiles; i++) {
+		std::vector<unsigned char> image;
+		unsigned w, h;
+		ostringstream oss;
+
+		unsigned error = decodePAK(image, w, h, pakPathName, i);
+		if (error)
+		{
+			std::cout << "PAK decoding error " << error << std::endl;
+			return;
+		}
+
+		std::vector<unsigned char> png;
+		error = lodepng::encode(png, image, w, h);
+
+		if (error)
+		{
+			std::cout << "PNG encoding error " << error << ": " << lodepng_error_text(error) << std::endl;
+			return;
+		}
+		oss << fileDest << "\\" << fileDest << i << ".png";
+		lodepng::save_file(png, oss.str().c_str());
 	}
+	return;
+}
 
-	std::vector<unsigned char> png;
-	error = lodepng::encode(png, image, w, h);
+int executeForEntireDirectory() {
+	DIR *dir;
+	struct dirent *ent;
+	char * fileType;
+	int packFiles = 0;
 
-	if (error)
-	{
-		std::cout << "PNG encoding error " << error << ": " << lodepng_error_text(error) << std::endl;
-		return 0;
+	if ((dir = opendir(".")) != NULL) {
+		/* print all the files and directories within directory */
+		while ((ent = readdir(dir)) != NULL) {
+			if ((fileType = strstr(ent->d_name, ".pak")) != NULL) {
+				cout << ent->d_name << endl;
+				unpackEntirePakFile(ent->d_name);
+				packFiles++;
+			}
+		}
+		closedir(dir);
 	}
+	else {
+		return -1;
+	}
+	return packFiles;
+}
 
-	lodepng::save_file(png, argv[2]);
-
+int main(int argc, char *argv[]) {
+	int result = executeForEntireDirectory();
+	if (result == 0) {
+		cout << "No .PAK file found in current directory. Please run this program in the sprites folder" << endl;
+	}
+	else if (result == -1) {
+		cout << "Could no open directory, Permissions?" << endl;
+	}
+	else {
+		cout << "Success, unpacked " << result << " .PAK files." << endl;
+	}
 }
