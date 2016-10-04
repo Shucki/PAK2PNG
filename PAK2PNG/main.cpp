@@ -47,7 +47,7 @@ using namespace std;
 
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO headerDIBInformation)
+unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
@@ -68,6 +68,9 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 
 	unsigned dataSize = scanlineBytes * h;
 	if (bmp.size() < dataSize + pixeloffset) return 3; //BMP file too small to contain all pixels
+
+	// Read DIB Header
+	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&bmp[14];
 
 	image.resize(w * h * 4);
 
@@ -120,27 +123,15 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 * numberOfFile:	which bmp file inside the PAK file to extract
 * return:		non-0 if error
 */
-unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], int numberOfFile = 0)
+unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], HANDLE pakFile, int numberOfFile = 0)
 {
 	DWORD  readBytes; // Bytes read after readfile, usable for debugging information
 	int spriteHeaderStart = 0; // Every bmp has a sprite header above
 	BITMAPFILEHEADER bmpFileHeader; // File header of the bmp we read
 	int numberOfFiles = 0;
-	HANDLE pakFile;
 
 	long bitmapFileStartLoc;
 	std::vector<unsigned char> bmp;
-
-	// Create pakfile handle and check for success
-	pakFile = CreateFileA(pathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
-	if (pakFile == INVALID_HANDLE_VALUE) {
-		cout << "CreateFile Error: " << GetLastError() << " PathName: " << pathName << endl;
-		return 4;
-	}
-	if (pakFile == NULL) {
-		std::cout << "pakFile is null" << std::endl;
-		return 4;
-	}
 
 	// Read frame information
 	pngInformation pngInformation;
@@ -169,12 +160,8 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	// Read bmp info into pak vector
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &bmp[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-
-	CloseHandle(pakFile);
-
-	// Read DIB info header
-	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&bmp[14];
-	return decodeBMP(image, w, h, bmp, headerDIBInformation);
+	
+	return decodeBMP(image, w, h, bmp);
 }
 
 /**
@@ -205,7 +192,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	// Check for how many files there are
 	SetFilePointer(pakFile, 24, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	CloseHandle(pakFile);
+
 	numberOfFiles = (numberOfFiles - 24) / 8;
 
 	for (int i = 0; i < numberOfFiles; i++) {
@@ -213,7 +200,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 		unsigned w, h;
 		ostringstream oss;
 
-		unsigned error = decodePAK(image, w, h, pakPathName, i);
+		unsigned error = decodePAK(image, w, h, pakPathName, pakFile, i);
 		if (error)
 		{
 			std::cout << "PAK decoding error " << error << std::endl;
@@ -231,6 +218,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 		oss << fileDest << "\\" << fileDest << i << ".png";
 		lodepng::save_file(png, oss.str().c_str());
 	}
+	CloseHandle(pakFile);
 	return;
 }
 
