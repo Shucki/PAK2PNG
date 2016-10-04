@@ -44,7 +44,7 @@ using namespace std;
 
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo)
+unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO headerDIBInformation)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
@@ -91,9 +91,9 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 			}
 			else if (numChannels == 1) // Read the color out of the color table
 			{
-				image[newpos + 0] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbRed; //R
-				image[newpos + 1] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbGreen; //G
-				image[newpos + 2] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbBlue; //B
+				image[newpos + 0] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbRed; //R
+				image[newpos + 1] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbGreen; //G
+				image[newpos + 2] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbBlue; //B
 				image[newpos + 3] = 255;
 			}
 			else
@@ -127,7 +127,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	long bitmapFileStartLoc;
 	std::vector<unsigned char> pak;
 
-	// create pakfile handle and check for success
+	// Create pakfile handle and check for success
 	pakFile = CreateFileA(pathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
 	if (pakFile == INVALID_HANDLE_VALUE) {
 		cout << "CreateFile Error: " << GetLastError() << endl;
@@ -138,10 +138,7 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 		return 4;
 	}
 
-	// resize the pak vector to full pakfile size, so it can be used in the bmp decoding function
-	pak.resize(GetFileSize(pakFile, NULL));
-
-	// read frame information
+	// Read frame information
 	pngInformation pngInformation;
 	pngInformation.imageFrames = 0;
 
@@ -162,13 +159,18 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
 	if(!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl; // sizeof(bmpHeader) = 14 
 	
+	// Resize the pak vector to full pakfile size, so it can be used in the bmp decoding function
+	pak.resize(bmpFileHeader.bfSize);
+
 	// Read bmp info into pak vector
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
 	if(!ReadFile(pakFile, &pak[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+
 	CloseHandle(pakFile);
 
-	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)&pak[14];
-	return decodeBMP(image, w, h, pak, m_bmpInfo);
+	// Read DIB info header
+	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&pak[14];
+	return decodeBMP(image, w, h, pak, headerDIBInformation);
 }
 
 
