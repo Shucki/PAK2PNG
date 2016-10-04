@@ -155,6 +155,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dirent.h" />
+    <ClInclude Include="json.hpp" />
     <ClInclude Include="lodepng-master\lodepng.h" />
     <ClInclude Include="lodepng-master\lodepng_util.h" />
     <ClInclude Include="pak2png.h" />

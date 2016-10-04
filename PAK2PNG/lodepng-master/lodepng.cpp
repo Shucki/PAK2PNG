@@ -795,7 +795,7 @@ unsigned lodepng_huffman_code_lengths(unsigned* lengths, const unsigned* frequen
   BPMNode* leaves; /*the symbols, only those with > 0 frequency*/
 
   if(numcodes == 0) return 80; /*error: a tree of 0 symbols is not supposed to be made*/
-  if((1u << maxbitlen) < numcodes) return 80; /*error: represent all symbols*/
+  if((1u << maxbitlen) < (unsigned int)numcodes) return 80; /*error: represent all symbols*/
 
   leaves = (BPMNode*)lodepng_malloc(numcodes * sizeof(*leaves));
   if(!leaves) return 83; /*alloc fail*/

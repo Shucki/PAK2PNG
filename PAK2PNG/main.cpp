@@ -42,6 +42,7 @@ NOTE: it overwrites the output file without warning if it exists!
 #include <direct.h>
 #include "dirent.h"
 #include <sstream>
+#include "json.hpp"
 
 using namespace std;
 
