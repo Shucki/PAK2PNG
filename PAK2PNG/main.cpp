@@ -24,22 +24,14 @@ distribution.
 */
 
 /*
-Load a BMP image and convert it to a PNG image. This example also shows how
-to use other data with the same memory structure as BMP, such as the image
-format native to win32, GDI (HBITMAP, BITMAPINFO, ...) often encountered if
-you're programming for Windows in Visual Studio.
-
-This example only supports uncompressed 24-bit RGB or 32-bit RGBA bitmaps.
-For other types of BMP's, use a full fledged BMP decoder, or convert the
-bitmap to 24-bit or 32-bit format.
-
+This is an altered version of the bmp2png example from lodepng.
+Load a PAK and unpack the BMP files inside and convert them to the PNG file format.
+PAK header information will be stored in their respective JSON file.
 NOTE: it overwrites the output file without warning if it exists!
 */
 
-//g++ lodepng.cpp example_bmp2png.cpp -ansi -pedantic -Wall -Wextra -O3
-
+#include "pak2png.h"
 #include "lodepng.h"
-
 #include <iostream>
 #include <stdio.h>
 #include <io.h>
@@ -47,10 +39,12 @@ NOTE: it overwrites the output file without warning if it exists!
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <Windows.h>
+
 using namespace std;
+
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo, long lBitmapFileStartLoc)
+unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp, LPBITMAPINFO m_bmpInfo)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
@@ -81,130 +75,100 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	-each scanline has padding bytes to make it a multiple of 4 if needed
 	The 2D for loop below does all these 3 conversions at once.
 	*/
-	if (numChannels != 1)
-		for (unsigned y = 0; y < h; y++)
-			for (unsigned x = 0; x < w; x++)
+	for (unsigned y = 0; y < h; y++)
+		for (unsigned x = 0; x < w; x++)
+		{
+			//pixel start byte position in the BMP
+			unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels * x;
+			//pixel start byte position in the new raw image
+			unsigned newpos = 4 * y * w + 4 * x;
+			if (numChannels == 3)
 			{
-				//pixel start byte position in the BMP
-				unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels * x;
-				//pixel start byte position in the new raw image
-				unsigned newpos = 4 * y * w + 4 * x;
-				if (numChannels == 3)
-				{
-					image[newpos + 0] = bmp[bmpos + 2]; //R
-					image[newpos + 1] = bmp[bmpos + 1]; //G
-					image[newpos + 2] = bmp[bmpos + 0]; //B
-					image[newpos + 3] = 255;            //A
-				}
-				else
-				{
-					image[newpos + 0] = bmp[bmpos + 3]; //R
-					image[newpos + 1] = bmp[bmpos + 2]; //G
-					image[newpos + 2] = bmp[bmpos + 1]; //B
-					image[newpos + 3] = bmp[bmpos + 0]; //A
-				}
+				image[newpos + 0] = bmp[bmpos + 2]; //R
+				image[newpos + 1] = bmp[bmpos + 1]; //G
+				image[newpos + 2] = bmp[bmpos + 0]; //B
+				image[newpos + 3] = 255;            //A
 			}
-	if (numChannels == 1)
-		for (unsigned y = 0; y < h; y++)
-			for (unsigned x = 0; x < w; x++)
+			else if (numChannels == 1) // Read the color out of the color table
 			{
-				//pixel start byte position in the BMP
-				unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels* x;
-				
-				//pixel start byte position in the new raw image
-				unsigned newpos = 4 * y * w + 4 * x;
-
-				cout << "m_dwBitmapFileStartLoc: " << lBitmapFileStartLoc << " Pixeloffset: "<< pixeloffset << " BMPOS: "<< bmpos << endl;
-
 				image[newpos + 0] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbRed; //R
 				image[newpos + 1] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbGreen; //G
 				image[newpos + 2] = m_bmpInfo->bmiColors[bmp[bmpos]].rgbBlue; //B
-				image[newpos + 3] = 255;//bmp[bmpos + 0]; //A
-				//Sleep(3);
-
+				image[newpos + 3] = 255;
+			}
+			else
+			{
+				image[newpos + 0] = bmp[bmpos + 3]; //R
+				image[newpos + 1] = bmp[bmpos + 2]; //G
+				image[newpos + 2] = bmp[bmpos + 1]; //B
+				image[newpos + 3] = bmp[bmpos + 0]; //A
 			}
 
+		}
 	return 0;
 }
-/***********Spritevalue explanations:*************
-24 = PAK Header
 
-hPakFile = FileHandle
-sNthFile = File number inside pak
-iASDstart = Buffer(Integer), + 104 = m_iTotalFrame
-nCount = Number of bytes read
-
-
-
-
+/**
+* Method:    decodePAK
+* param image: output image
+* param w: image width
+* param h: image height
+* pathName: filepath of pak file
+* numberOfFile: which bmp file inside the PAK file to extract
+* return: non-0 if error
 */
-
-typedef struct stBrushtag
+unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], int numberOfFile = 2)
 {
-	short sx; //startX
-	short sy; //startY
-	short szx; //sizex
-	short szy; //sizey
-	short pvx; //correction for placement
-	short pvy; //correction for placement
-} stBrush;
+	DWORD  readBytes; // Bytes read after readfile, usable for debugging information
+	int spriteHeaderStart = 0; // Every bmp has a sprite header above
+	BITMAPFILEHEADER bmpFileHeader; // File header of the bmp we read
+	HANDLE pakFile;
 
-
-unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, CHAR PathName[28])
-{
-	DWORD  nCount;
-	int iASDstart = 0;
-	HANDLE hPakFile;
-	int sNthFile = 2; // Number of file1
-	long lBitmapFileStartLoc;
+	long bitmapFileStartLoc;
 	std::vector<unsigned char> pak;
-	cout << PathName << endl;
-	hPakFile = CreateFileA(PathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
-	if (hPakFile == INVALID_HANDLE_VALUE)
+
+	// create pakfile handle and check for success
+	pakFile = CreateFileA(pathName, GENERIC_READ, NULL, NULL, OPEN_EXISTING, NULL, NULL);
+	if (pakFile == INVALID_HANDLE_VALUE) {
 		cout << "CreateFile Error: " << GetLastError() << endl;
-	if (hPakFile == NULL) {
+		return 4;
+	}
+	if (pakFile == NULL) {
 		std::cout << "hPakFile is null" << std::endl;
+		return 4;
 	}
-	stBrushtag *m_stBrush;
-	int m_iTotalFrame = 0;
 
-	SetFilePointer(hPakFile, 24 + sNthFile * 8, NULL, FILE_BEGIN);
-	if (!ReadFile(hPakFile, &iASDstart, 4, &nCount, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	//i+100       Sprite Confirm
-	std::cout << iASDstart << std::endl;
-	SetFilePointer(hPakFile, iASDstart + 100, NULL, FILE_BEGIN);
-	ReadFile(hPakFile, &m_iTotalFrame, 4, &nCount, NULL);
-	lBitmapFileStartLoc = iASDstart + (108 + (12 * m_iTotalFrame));
-	m_stBrush = new stBrush[m_iTotalFrame];
-	ReadFile(hPakFile, m_stBrush, 12 * m_iTotalFrame, &nCount, NULL);
+	// resize the pak vector to full pakfile size, so it can be used in the bmp decoding function
+	pak.resize(GetFileSize(pakFile, NULL));
 
-	BITMAPFILEHEADER fh; //bmp 
+	// read frame information
+	pngInformation pngInformation;
+	pngInformation.imageFrames = 0;
 
-	SetFilePointer(hPakFile, lBitmapFileStartLoc, NULL, FILE_BEGIN);
-	ReadFile(hPakFile, (char *)&fh, 14, &nCount, NULL);//sizeof(bmpHeader)==14
-	SetFilePointer(hPakFile, lBitmapFileStartLoc, NULL, FILE_BEGIN);
-	pak.resize(GetFileSize(hPakFile, NULL));
-	ReadFile(hPakFile, &pak[0], fh.bfSize, &nCount, NULL);
-	CloseHandle(hPakFile);
-	LPBITMAPINFOHEADER bmpInfoHeader = (LPBITMAPINFOHEADER)&pak[14];
+	// Go to sprite header start bytes and read them
+	SetFilePointer(pakFile, 24 + numberOfFile * 8, NULL, FILE_BEGIN);
+	if (!ReadFile(pakFile, &spriteHeaderStart, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	
+	// Sprite header start + 100 is where the information of how many frames are in the bitmap is stored.
+	SetFilePointer(pakFile, spriteHeaderStart + 100, NULL, FILE_BEGIN);
+	if(!ReadFile(pakFile, &pngInformation.imageFrames, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	
+	// Bitmap information starts after total frame info and the individual sprite info struct. (Unknown: what are the 4 bytes spriteheaderstart + 104 ??
+	bitmapFileStartLoc = spriteHeaderStart + (108 + (12 * pngInformation.imageFrames));
+	pngInformation.frameInformation = new frameInformtation[pngInformation.imageFrames];
+	if(!ReadFile(pakFile, pngInformation.frameInformation, 12 * pngInformation.imageFrames, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	
+	// Read bmp header
+	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
+	if(!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl; // sizeof(bmpHeader) = 14 
+	
+	// Read bmp info into pak vector
+	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
+	if(!ReadFile(pakFile, &pak[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	CloseHandle(pakFile);
+
 	LPBITMAPINFO m_bmpInfo = (LPBITMAPINFO)&pak[14];
-	WORD m_wWidthX = (WORD)(bmpInfoHeader->biWidth);
-	WORD m_wWidthY = (WORD)(bmpInfoHeader->biHeight);
-	WORD m_wColorNums;
-	if (bmpInfoHeader->biClrUsed == 0)
-	{
-		if (bmpInfoHeader->biBitCount == 24) m_wColorNums = 0;
-		else if (bmpInfoHeader->biBitCount == 8) m_wColorNums = 256;
-		else if (bmpInfoHeader->biBitCount == 1) m_wColorNums = 2;
-		else if (bmpInfoHeader->biBitCount == 4) m_wColorNums = 16;
-		else m_wColorNums = 0;
-	}
-	else m_wColorNums = (WORD)(bmpInfoHeader->biClrUsed);
-	//	for (int i = 0; i < 256; i++)
-		//	std::cout << "R: " << (int)m_bmpInfo->bmiColors[i].rgbRed << " G: " << (int)m_bmpInfo->bmiColors[i].rgbGreen << " B: " << (int)m_bmpInfo->bmiColors[i].rgbBlue << std::endl;
-
-
-	return decodeBMP(image, w, h, pak, m_bmpInfo, lBitmapFileStartLoc);
+	return decodeBMP(image, w, h, pak, m_bmpInfo);
 }
 
 

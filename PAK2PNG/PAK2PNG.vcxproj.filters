@@ -35,5 +35,8 @@
     <ClInclude Include="lodepng-master\lodepng_util.h">
       <Filter>Header Files\lodepng</Filter>
     </ClInclude>
+    <ClInclude Include="pak2png.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

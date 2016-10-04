@@ -156,6 +156,7 @@
   <ItemGroup>
     <ClInclude Include="lodepng-master\lodepng.h" />
     <ClInclude Include="lodepng-master\lodepng_util.h" />
+    <ClInclude Include="pak2png.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
