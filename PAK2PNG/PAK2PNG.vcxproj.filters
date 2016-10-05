@@ -27,6 +27,9 @@
     <ClCompile Include="lodepng-master\lodepng.cpp">
       <Filter>Source Files\lodepng</Filter>
     </ClCompile>
+    <ClCompile Include="Sprite.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lodepng-master\lodepng.h">
@@ -35,10 +38,13 @@
     <ClInclude Include="lodepng-master\lodepng_util.h">
       <Filter>Header Files\lodepng</Filter>
     </ClInclude>
-    <ClInclude Include="pak2png.h">
+    <ClInclude Include="dirent.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="dirent.h">
+    <ClInclude Include="json.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Sprite.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
