@@ -42,13 +42,12 @@ NOTE: it overwrites the output file without warning if it exists!
 #include <direct.h>
 #include "dirent.h"
 #include <sstream>
-#include "json.hpp"
+#include "Sprite.h"
 
 using namespace std;
-
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, const std::vector<unsigned char>& bmp)
+unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const vector<unsigned char>& bmp)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
 
@@ -124,7 +123,7 @@ unsigned decodeBMP(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 * numberOfFile:	which bmp file inside the PAK file to extract
 * return:		non-0 if error
 */
-unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], HANDLE pakFile, int numberOfFile = 0)
+unsigned decodePAK(vector<unsigned char>& image, unsigned& w, unsigned& h, char pathName[28], HANDLE pakFile, int numberOfFile, Sprite::pngInformation &pngInformation)
 {
 	DWORD  readBytes; // Bytes read after readfile, usable for debugging information
 	int spriteHeaderStart = 0; // Every bmp has a sprite header above
@@ -132,36 +131,35 @@ unsigned decodePAK(std::vector<unsigned char>& image, unsigned& w, unsigned& h, 
 	int numberOfFiles = 0;
 
 	long bitmapFileStartLoc;
-	std::vector<unsigned char> bmp;
+	vector<unsigned char> bmp;
 
 	// Read frame information
-	pngInformation pngInformation;
 	pngInformation.imageFrames = 0;
 
 	// Go to sprite header start bytes and read them
 	SetFilePointer(pakFile, 24 + numberOfFile * 8, NULL, FILE_BEGIN);
-	if (!ReadFile(pakFile, &spriteHeaderStart, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	if (!ReadFile(pakFile, &spriteHeaderStart, 4, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
 
 	// Sprite header start + 100 is where the information of how many frames are in the bitmap is stored.
 	SetFilePointer(pakFile, spriteHeaderStart + 100, NULL, FILE_BEGIN);
-	if (!ReadFile(pakFile, &pngInformation.imageFrames, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-
+	if (!ReadFile(pakFile, &(pngInformation.imageFrames), 4, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
+	
 	// Bitmap information starts after total frame info and the individual sprite info struct. (Unknown: what are the 4 bytes spriteheaderstart + 104 ??
 	bitmapFileStartLoc = spriteHeaderStart + (108 + (12 * pngInformation.imageFrames));
-	pngInformation.frameInformation = new frameInformtation[pngInformation.imageFrames];
-	if (!ReadFile(pakFile, pngInformation.frameInformation, 12 * pngInformation.imageFrames, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	pngInformation.frameInformation = new Sprite::frameInformtation[pngInformation.imageFrames];
+	if (!ReadFile(pakFile, pngInformation.frameInformation, 12 * pngInformation.imageFrames, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
 
 	// Read bmp header
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
-	if (!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl; // sizeof(bmpHeader) = 14 
+	if (!ReadFile(pakFile, (char *)&bmpFileHeader, 14, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl; // sizeof(bmpHeader) = 14 
 
 	// Resize the bmp vector to bmp size (found in header), if size errors occur check here it is stated online this might be incorrect for some files.
 	bmp.resize(bmpFileHeader.bfSize);
 
 	// Read bmp info into pak vector
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
-	if (!ReadFile(pakFile, &bmp[0], bmpFileHeader.bfSize, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
-	
+	if (!ReadFile(pakFile, &bmp[0], bmpFileHeader.bfSize, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
+
 	return decodeBMP(image, w, h, bmp);
 }
 
@@ -173,6 +171,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	int numberOfFiles = 0;
 	DWORD readBytes = 0;
 	string fileDest;
+
 	fileDest = pakPathName;
 
 	// Create destination folder
@@ -186,40 +185,44 @@ void unpackEntirePakFile(char pakPathName[260]) {
 		return;
 	}
 	if (pakFile == NULL) {
-		std::cout << "pakFile is null" << std::endl;
+		cout << "pakFile is null" << endl;
 		return;
 	}
 
 	// Check for how many files there are
 	SetFilePointer(pakFile, 24, NULL, FILE_BEGIN);
-	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) std::cout << "ReadFile failed: " << GetLastError() << std::endl;
+	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
 
 	numberOfFiles = (numberOfFiles - 24) / 8;
+	Sprite s(numberOfFiles);
 
 	for (int i = 0; i < numberOfFiles; i++) {
-		std::vector<unsigned char> image;
+		vector<unsigned char> image;
 		unsigned w, h;
 		ostringstream oss;
 
-		unsigned error = decodePAK(image, w, h, pakPathName, pakFile, i);
+		unsigned error = decodePAK(image, w, h, pakPathName, pakFile, i, s.pngInfo[i]);
 		if (error)
 		{
-			std::cout << "PAK decoding error " << error << std::endl;
+			cout << "PAK decoding error " << error << endl;
 			return;
 		}
 
-		std::vector<unsigned char> png;
+		vector<unsigned char> png;
 		error = lodepng::encode(png, image, w, h);
 
 		if (error)
 		{
-			std::cout << "PNG encoding error " << error << ": " << lodepng_error_text(error) << std::endl;
+			cout << "PNG encoding error " << error << ": " << lodepng_error_text(error) << endl;
 			return;
 		}
 		oss << fileDest << "\\" << fileDest << i << ".png";
 		lodepng::save_file(png, oss.str().c_str());
 	}
 	CloseHandle(pakFile);
+	ostringstream oss;
+	oss << fileDest << "\\" << fileDest << ".json";
+	s.SaveToFile(oss.str());
 	return;
 }
 
