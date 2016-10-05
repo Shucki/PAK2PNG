@@ -233,7 +233,6 @@ int executeForEntireDirectory() {
 	int packFiles = 0;
 
 	if ((dir = opendir(".")) != NULL) {
-		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
 			if ((fileType = strstr(ent->d_name, ".pak")) != NULL) {
 				cout << "Unpacking: " << ent->d_name << endl;
