@@ -43,14 +43,51 @@ NOTE: it overwrites the output file without warning if it exists!
 #include "dirent.h"
 #include <sstream>
 #include "Sprite.h"
+#include "main.h"
 
 using namespace std;
+
+ostringstream logstream;
+//beautiful hardcoded filenames, potential for read from textfile
+bool isAlphaSprite(string spriteName) {
+	if ((spriteName.compare("Tile388-402.pak") == 0) ||
+		(spriteName.compare("Tile403-405.pak") == 0) ||
+		(spriteName.compare("Tile406-421.pak") == 0) ||
+		(spriteName.compare("Tile422-429.pak") == 0) ||
+		(spriteName.compare("Tile430-443.pak") == 0) ||
+		(spriteName.compare("Tile444-444.pak") == 0) ||
+		(spriteName.compare("Tile445-461.pak") == 0) ||
+		(spriteName.compare("Tile462-464.pak") == 0) ||
+		(spriteName.compare("Tile462-473.pak") == 0) ||
+		(spriteName.compare("Tile462-475.pak") == 0) ||
+		(spriteName.compare("Tile474-478.pak") == 0) ||
+		(spriteName.compare("Tile474-488.pak") == 0) ||
+		(spriteName.compare("Tile479-488.pak") == 0) ||
+		//(spriteName.compare("Tile489-522.pak") == 0) ||
+		(spriteName.compare("Tile523-530.pak") == 0) ||
+		(spriteName.compare("Tile523-532.pak") == 0) ||
+		(spriteName.compare("Tile531-540.pak") == 0) ||
+		(spriteName.compare("Tile541-545.pak") == 0) ||
+
+		(spriteName.compare("maptiles1.pak") == 0) ||
+		(spriteName.compare("maptiles2.pak") == 0) ||
+		(spriteName.compare("maptiles3.pak") == 0) ||
+		(spriteName.compare("maptiles4.pak") == 0) ||
+		(spriteName.compare("maptiles5.pak") == 0) ||
+		(spriteName.compare("maptiles6.pak") == 0) ||
+		(spriteName.compare("maptiles353-361.pak") == 0) ||
+		
+		(spriteName.compare("ugtile.pak") == 0))
+		return false;
+	return true;
+}
+
 //returns 0 if all went ok, non-0 if error
 //output image is always given in RGBA (with alpha channel), even if it's a BMP without alpha channel
-unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const vector<unsigned char>& bmp)
+unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const vector<unsigned char>& bmp, bool isAlphaSprite = false)
 {
 	static const unsigned MINHEADER = 54; //minimum BMP header size
-
+	RGBQUAD alphaColor;
 	if (bmp.size() < MINHEADER) return -1;
 	if (bmp[0] != 'B' || bmp[1] != 'M') return 1; //It's not a BMP file if it doesn't start with marker 'BM'
 	unsigned pixeloffset = bmp[10] + 256 * bmp[11] + 65536 * bmp[12] + bmp[13] * 16777216; //where the pixel data starts
@@ -58,7 +95,11 @@ unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const
 	w = bmp[18] + bmp[19] * 256;
 	h = bmp[22] + bmp[23] * 256;
 	//read number of channels from BMP header
-	if (bmp[28] != 24 && bmp[28] != 32 && bmp[28] != 8) return 2; //only 24-bit and 32-bit BMPs are supported. -> Added 8-bit
+	if (bmp[28] != 24 && bmp[28] != 32 && bmp[28] != 8) {
+		logstream << "Supports only 8/24/32bit bmp, given bmp is: " << to_string((unsigned char)bmp[28]) << " bit" << endl;
+		cout << "Supports only 8/24/32bit bmp, given bmp is: " << to_string((unsigned char)bmp[28]) << " bit" << endl;
+		return 2; //only 24-bit and 32-bit BMPs are supported. -> Added 8-bit
+	}
 	unsigned numChannels = bmp[28] / 8;
 
 	//The amount of scanline bytes is width of image times channels, with extra bytes added if needed
@@ -73,7 +114,12 @@ unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const
 	LPBITMAPINFO headerDIBInformation = (LPBITMAPINFO)&bmp[14];
 
 	image.resize(w * h * 4);
-
+	if (numChannels == 1) alphaColor = headerDIBInformation->bmiColors[bmp[pixeloffset + ((h-1) * scanlineBytes)]];
+	else {
+		alphaColor.rgbRed = bmp[pixeloffset + ((h - 1) * scanlineBytes) + 2];
+		alphaColor.rgbGreen = bmp[pixeloffset + ((h - 1) * scanlineBytes) + 1];
+		alphaColor.rgbBlue = bmp[pixeloffset + ((h - 1) * scanlineBytes) + 0];
+	}
 	/*
 	There are 3 differences between BMP and the raw image buffer for LodePNG:
 	-it's upside down
@@ -84,6 +130,7 @@ unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const
 	for (unsigned y = 0; y < h; y++)
 		for (unsigned x = 0; x < w; x++)
 		{
+
 			//pixel start byte position in the BMP
 			unsigned bmpos = pixeloffset + (h - y - 1) * scanlineBytes + numChannels * x;
 			//pixel start byte position in the new raw image
@@ -93,14 +140,24 @@ unsigned decodeBMP(vector<unsigned char>& image, unsigned& w, unsigned& h, const
 				image[newpos + 0] = bmp[bmpos + 2]; //R
 				image[newpos + 1] = bmp[bmpos + 1]; //G
 				image[newpos + 2] = bmp[bmpos + 0]; //B
-				image[newpos + 3] = 255;            //A
+				if (isAlphaSprite && (bmp[bmpos + 0] == alphaColor.rgbBlue) &&
+					(bmp[bmpos + 2] == alphaColor.rgbRed) &&
+					(bmp[bmpos + 1] == alphaColor.rgbGreen)) {
+					image[newpos + 3] = 0; // Alpha = 0 means transparent
+				}
+				else image[newpos + 3] = 255;
 			}
 			else if (numChannels == 1) // Read the color out of the color table
 			{
 				image[newpos + 0] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbRed; //R
 				image[newpos + 1] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbGreen; //G
 				image[newpos + 2] = headerDIBInformation->bmiColors[bmp[bmpos]].rgbBlue; //B
-				image[newpos + 3] = 255;
+				if (isAlphaSprite && (headerDIBInformation->bmiColors[bmp[bmpos]].rgbBlue == alphaColor.rgbBlue) &&
+					(headerDIBInformation->bmiColors[bmp[bmpos]].rgbRed == alphaColor.rgbRed) &&
+					(headerDIBInformation->bmiColors[bmp[bmpos]].rgbGreen == alphaColor.rgbGreen)) {
+					image[newpos + 3] = 0; // Alpha = 0 means transparent
+				}
+				else image[newpos + 3] = 255;				
 			}
 			else
 			{
@@ -143,7 +200,7 @@ unsigned decodePAK(vector<unsigned char>& image, unsigned& w, unsigned& h, char 
 	// Sprite header start + 100 is where the information of how many frames are in the bitmap is stored.
 	SetFilePointer(pakFile, spriteHeaderStart + 100, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &(pngInformation.imageFrames), 4, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
-	
+
 	// Bitmap information starts after total frame info and the individual sprite info struct. (Unknown: what are the 4 bytes spriteheaderstart + 104 ??
 	bitmapFileStartLoc = spriteHeaderStart + (108 + (12 * pngInformation.imageFrames));
 	pngInformation.frameInformation = new Sprite::frameInformtation[pngInformation.imageFrames];
@@ -160,7 +217,7 @@ unsigned decodePAK(vector<unsigned char>& image, unsigned& w, unsigned& h, char 
 	SetFilePointer(pakFile, bitmapFileStartLoc, NULL, FILE_BEGIN);
 	if (!ReadFile(pakFile, &bmp[0], bmpFileHeader.bfSize, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
 
-	return decodeBMP(image, w, h, bmp);
+	return decodeBMP(image, w, h, bmp, isAlphaSprite(pathName));
 }
 
 /**
@@ -205,6 +262,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 		if (error)
 		{
 			cout << "PAK decoding error " << error << endl;
+			logstream << "Pak decoding error " << error << " on file: " << pakPathName << endl;
 			return;
 		}
 
@@ -259,4 +317,11 @@ int main(int argc, char *argv[]) {
 	else {
 		cout << "Success, unpacked " << result << " .PAK files." << endl;
 	}
+	ofstream file("pak2pnglog.log");
+	if (file.is_open())
+	{
+		file << logstream.str();
+		file.close();
+	}
+
 }
