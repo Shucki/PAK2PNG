@@ -17,19 +17,20 @@ Sprite::~Sprite() {
 
 int Sprite::SaveToFile(string fileName) {
 	json jPNG;
+	jPNG["total"] = imageTotal;
 	for (int imageNumber = 0; imageNumber < imageTotal; imageNumber++) {
-		jPNG[to_string(imageNumber)]["Sprite Frames"] = pngInfo[imageNumber].imageFrames;
-
+		string s = string("sprite" + to_string(imageNumber));
+		jPNG[s]["frameCount"] = pngInfo[imageNumber].imageFrames;
 		for (int i = 0; i < pngInfo[imageNumber].imageFrames; i++) {
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["x"] = pngInfo[imageNumber].frameInformation[i].x;
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["y"] = pngInfo[imageNumber].frameInformation[i].y;
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["sizeX"] = pngInfo[imageNumber].frameInformation[i].sizeX;
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["sizeY"] = pngInfo[imageNumber].frameInformation[i].sizeY;
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["placementX"] = pngInfo[imageNumber].frameInformation[i].placementX;
-			jPNG[to_string(imageNumber)]["Frame Information"][to_string(i)]["placementY"] = pngInfo[imageNumber].frameInformation[i].placementY;
+			jPNG[s]["frames"][to_string(i)]["x"] = pngInfo[imageNumber].frameInformation[i].x;
+			jPNG[s]["frames"][to_string(i)]["y"] = pngInfo[imageNumber].frameInformation[i].y;
+			jPNG[s]["frames"][to_string(i)]["w"] = pngInfo[imageNumber].frameInformation[i].sizeX;
+			jPNG[s]["frames"][to_string(i)]["h"] = pngInfo[imageNumber].frameInformation[i].sizeY;
+			jPNG[s]["frames"][to_string(i)]["placementOffset"]["x"] = pngInfo[imageNumber].frameInformation[i].placementX;
+			jPNG[s]["frames"][to_string(i)]["placementOffset"]["y"] = pngInfo[imageNumber].frameInformation[i].placementY;
 		}
 	}
-	jPNG["Image Total"] = imageTotal;
+	
 	ofstream file(fileName);
 	if (file.is_open())
 	{
