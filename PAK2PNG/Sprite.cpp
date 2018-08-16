@@ -15,11 +15,11 @@ Sprite::~Sprite() {
 	free(pngInfo);
 }
 
-int Sprite::SaveToFile(string fileName) {
+int Sprite::SaveToFile(string fileName, string frameName) {
 	json jPNG;
 	jPNG["total"] = imageTotal;
 	for (int imageNumber = 0; imageNumber < imageTotal; imageNumber++) {
-		string s = string("sprite" + to_string(imageNumber));
+		string s = string(frameName + to_string(imageNumber));
 		jPNG[s]["frameCount"] = pngInfo[imageNumber].imageFrames;
 		for (int i = 0; i < pngInfo[imageNumber].imageFrames; i++) {
 			jPNG[s]["frames"][to_string(i)]["x"] = pngInfo[imageNumber].frameInformation[i].x;

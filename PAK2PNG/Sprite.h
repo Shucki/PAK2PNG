@@ -27,8 +27,9 @@ public:
 	pngInformation * pngInfo;
 
 	Sprite(int imageTotal);
-	int SaveToFile(std::string fileName);
+	//int SaveToFile(std::string fileName);
 
+	int SaveToFile(std::string fileName, std::string frameName);
 	~Sprite();
 private:
 	Sprite();
