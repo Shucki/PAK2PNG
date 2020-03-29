@@ -309,7 +309,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	CloseHandle(pakFile);
 	ostringstream oss;
 	oss << fileDest << "\\" << fileDest << ".json";
-	s.SaveToFile(oss.str(), fileDest);
+	s.SaveToFile(oss.str());
 	return;
 }
 

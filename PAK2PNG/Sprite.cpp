@@ -15,7 +15,7 @@ Sprite::~Sprite() {
 	free(pngInfo);
 }
 
-int Sprite::SaveToFile(string fileName, string spriteName) {
+int Sprite::SaveToFile(string fileName) {
 	json jPNG;
 	jPNG["total"] = imageTotal;
 	for (int imageNumber = 0; imageNumber < imageTotal; imageNumber++) {
