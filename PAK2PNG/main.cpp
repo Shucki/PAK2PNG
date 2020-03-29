@@ -321,7 +321,7 @@ int executeForEntireDirectory() {
 
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
-			if ((fileType = strstr(ent->d_name, ".pak")) != NULL) {
+			if ((fileType = strstr(ent->d_name, ".pak")) != NULL || (fileType = strstr(ent->d_name, ".PAK")) != NULL) {
 				cout << "Unpacking: " << ent->d_name << endl;
 				unpackEntirePakFile(ent->d_name);
 				packFiles++;
