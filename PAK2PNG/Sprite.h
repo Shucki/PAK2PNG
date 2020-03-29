@@ -28,8 +28,7 @@ public:
 
 	std::string spriteName;
 	Sprite(int imageTotal, std::string name);
-	int SaveToFile(std::string fileName);
-
+	int SaveToFile(std::string fileName, std::string spriteName);
 	~Sprite();
 private:
 	Sprite();
