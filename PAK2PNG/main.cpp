@@ -51,7 +51,9 @@ ostringstream logstream;
 //beautiful hardcoded filenames, potential for read from textfile
 bool isAlphaSprite(string spriteName) {
 	if ((spriteName.compare("Tile388-402.pak") == 0) ||
-		(spriteName.compare("Tile403-405.pak") == 0) ||
+		(spriteName.compare("Tile363-366.pak") == 0) ||
+		(spriteName.compare("Tile367-367.pak") == 0) ||
+		(spriteName.compare("Tile403-405.pak") == 0) || 
 		(spriteName.compare("Tile406-421.pak") == 0) ||
 		(spriteName.compare("Tile422-429.pak") == 0) ||
 		(spriteName.compare("Tile430-443.pak") == 0) ||
@@ -63,9 +65,9 @@ bool isAlphaSprite(string spriteName) {
 		(spriteName.compare("Tile474-478.pak") == 0) ||
 		(spriteName.compare("Tile474-488.pak") == 0) ||
 		(spriteName.compare("Tile479-488.pak") == 0) ||
-		//(spriteName.compare("Tile489-522.pak") == 0) ||
+		(spriteName.compare("Tile489-522.pak") == 0) ||
 		(spriteName.compare("Tile523-530.pak") == 0) ||
-		(spriteName.compare("Tile523-532.pak") == 0) ||
+		//(spriteName.compare("Tile523-532.pak") == 0) ||
 		(spriteName.compare("Tile531-540.pak") == 0) ||
 		(spriteName.compare("Tile541-545.pak") == 0) ||
 
@@ -76,9 +78,36 @@ bool isAlphaSprite(string spriteName) {
 		(spriteName.compare("maptiles5.pak") == 0) ||
 		(spriteName.compare("maptiles6.pak") == 0) ||
 		(spriteName.compare("maptiles353-361.pak") == 0) ||
-		
+
+		(spriteName.compare("EFFECT.pak") == 0) ||
+		(spriteName.compare("EFFECT2.pak") == 0) ||
+		(spriteName.compare("EFFECT3.pak") == 0) ||
+
+		(spriteName.compare("effect4.pak") == 0) ||
+		(spriteName.compare("effect5.pak") == 0) ||
+		(spriteName.compare("effect6.pak") == 0) ||
+		(spriteName.compare("Effect7.pak") == 0) ||
+		(spriteName.compare("Effect8.pak") == 0) ||
+		(spriteName.compare("effect9.pak") == 0) ||
+		(spriteName.compare("effect10.pak") == 0) ||
+		(spriteName.compare("Effect11.pak") == 0) ||
+		(spriteName.compare("effect11s.pak") == 0) ||
+		(spriteName.compare("Effect12.pak") == 0) ||
+		(spriteName.compare("Effect13.pak") == 0) ||
+		(spriteName.compare("EffectCStorm.pak") == 0) ||
+
+		(spriteName.compare("yspro.pak") == 0) ||
+		(spriteName.compare("yseffect2.pak") == 0) ||
+		(spriteName.compare("yseffect3.pak") == 0) ||
+		(spriteName.compare("yseffect4.pak") == 0) ||
+		(spriteName.compare("Wyvern.pak") == 0) ||
+		(spriteName.compare("CruEffect1.pak") == 0) ||
+
+		(spriteName.compare("Structures1.pak") == 0) ||
+		(spriteName.compare("Sinside1.pak") == 0) ||
 		(spriteName.compare("ugtile.pak") == 0))
 		return false;
+
 	return true;
 }
 
@@ -251,7 +280,7 @@ void unpackEntirePakFile(char pakPathName[260]) {
 	if (!ReadFile(pakFile, &numberOfFiles, 4, &readBytes, NULL)) cout << "ReadFile failed: " << GetLastError() << endl;
 
 	numberOfFiles = (numberOfFiles - 24) / 8;
-	Sprite s(numberOfFiles);
+	Sprite s(numberOfFiles, fileDest);
 
 	for (int i = 0; i < numberOfFiles; i++) {
 		vector<unsigned char> image;

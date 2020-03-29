@@ -26,7 +26,8 @@ public:
 	int imageTotal = 0;
 	pngInformation * pngInfo;
 
-	Sprite(int imageTotal);
+	std::string spriteName;
+	Sprite(int imageTotal, std::string name);
 	int SaveToFile(std::string fileName);
 
 	~Sprite();

@@ -7,7 +7,7 @@ Sprite::Sprite() {
 
 }
 
-Sprite::Sprite(int imageTotal) : imageTotal(imageTotal) {
+Sprite::Sprite(int imageTotal, string name) : imageTotal(imageTotal), spriteName(name) {
 	pngInfo = new pngInformation[imageTotal];
 }
 
@@ -19,10 +19,10 @@ int Sprite::SaveToFile(string fileName) {
 	json jPNG;
 	jPNG["total"] = imageTotal;
 	for (int imageNumber = 0; imageNumber < imageTotal; imageNumber++) {
-		string s = string("sprite" + to_string(imageNumber));
+		string s = string(spriteName + to_string(imageNumber));
 		jPNG[s]["frameCount"] = pngInfo[imageNumber].imageFrames;
 		for (int i = 0; i < pngInfo[imageNumber].imageFrames; i++) {
-			jPNG[s]["frames"][to_string(i)]["x"] = pngInfo[imageNumber].frameInformation[i].x;
+			jPNG[s]["frames"][to_string(i)]["x"] = pngInfo[imageNumber].frameInformation[i].x; //TODO: remove *2 to have a correct export
 			jPNG[s]["frames"][to_string(i)]["y"] = pngInfo[imageNumber].frameInformation[i].y;
 			jPNG[s]["frames"][to_string(i)]["w"] = pngInfo[imageNumber].frameInformation[i].sizeX;
 			jPNG[s]["frames"][to_string(i)]["h"] = pngInfo[imageNumber].frameInformation[i].sizeY;
